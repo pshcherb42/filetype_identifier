@@ -8,7 +8,6 @@ int main(int argc, char *argv[])
         fprintf(stderr, "usage: filetype <file> [file ...]\n");
         return 1;
     }
-
     for (int i = 1; i < argc; i++) {
         FileResult r = identify_file(argv[i]);
         print_result(&r, argv[i]);

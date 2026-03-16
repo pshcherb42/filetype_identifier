@@ -23,6 +23,7 @@ typedef struct {
 } FileResult;
 
 FileResult identify_file(const char *path);
+void zip_identifier(const char *path);
 void       print_result(const FileResult *r, const char *path);
 void       free_result(FileResult *r);
 

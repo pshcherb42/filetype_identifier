@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define EOCD_MAX_COMMENT 0xFFFF
+#define EOCD_MIN_SIZE 22
+
 /* ------------------------------------------------------------------ *
  *  Signature table
  *  mask: 0xFF = byte must match exactly, 0x00 = wildcard (don't care)
@@ -160,15 +163,21 @@ static char *elf_detail(const uint8_t *buf, size_t len)
 /* ------------------------------------------------------------------ *
  *  Core identify
  * ------------------------------------------------------------------ */
-FileResult identify_file(const char *path)
+    FileResult identify_file(const char *path)
 {
     FileResult result = { NULL, NULL };
 
     FILE *f = fopen(path, "rb");
-    if (!f) return result;
 
+    if (!f) 
+    {
+        perror("fopen failed");
+        return result;
+    }
+    
     uint8_t buf[READ_BUFFER_SIZE];
     size_t  n = fread(buf, 1, sizeof(buf), f);
+    printf("Bytes: %02X %02X %02X %02X\n", buf[0], buf[1], buf[2], buf[3]);
     fclose(f);
 
     for (size_t i = 0; i < N_SIGNATURES; i++) {
@@ -190,11 +199,55 @@ FileResult identify_file(const char *path)
             /* deep inspection for specific formats */
             if (strcmp(s->name, "ELF") == 0)
                 result.detail = elf_detail(buf, n);
+            else if (strcmp(s->name, "ZIP/JAR/DOCX") == 0)
+                zip_identifier(path);
             break;
         }
     }
 
     return result;
+}
+
+void zip_identifier(const char *path){
+    FILE *f = fopen(path, "rb");
+    if(!f){
+        perror("could not open file\n");
+        return ;
+    }
+
+    fseek(f, 0, SEEK_END); // find end
+    long filesize = ftell(f); // file size
+    long read_size = EOCD_MAX_COMMENT + EOCD_MIN_SIZE; //0xffff + 22
+    if (read_size > filesize) read_size = filesize; // if this true can we assure that the zip file is empty?
+
+    uint8_t *buf = malloc(read_size);
+    if(!buf){
+        perror("no buffer\n");
+        fclose(f);
+        return ;
+    }
+
+    fseek(f, filesize - read_size, SEEK_SET); // mover puntero desde el principio al principio de EOCD
+    fread(buf, 1, read_size, f);
+    //fclose(f);
+
+    for (long i = read_size - EOCD_MIN_SIZE; i >= 0; i--) {
+        if (buf[i] == 0x50 && buf[i+1] == 0x4B &&
+            buf[i+2] == 0x05 && buf[i+3] == 0x06) {
+            printf("Bytes: %02X %02X %02X %02X\n", buf[i], buf[i+1], buf[i+2], buf[i+3]);
+            uint32_t cd_offset = *(uint32_t *)(buf + i + 16);
+            printf("CD offset: %u\n", cd_offset);
+
+            uint8_t sig[4];
+            fseek(f, cd_offset, SEEK_SET);
+            fread(sig, 1, 4, f);
+            printf("CD signature: %02X %02X %02X %02X\n",
+                sig[0], sig[1], sig[2], sig[3]);
+
+            free(buf);
+            return ; // нашли EOCD
+        }
+    }
 }
 
 void print_result(const FileResult *r, const char *path)
