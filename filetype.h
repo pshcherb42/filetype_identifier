@@ -7,13 +7,14 @@
 #define MAX_MAGIC_BYTES 16
 #define READ_BUFFER_SIZE 264  /* enough for ZIP central directory offset */
 
+// signature table for all supported formats
 typedef struct {
     const char     *name;        /* "PNG", "ELF", "PDF" … */
     const char     *mime;        /* "image/png" */
     const char     *extension;   /* ".png" */
-    uint8_t         magic[MAX_MAGIC_BYTES];
-    uint8_t         mask[MAX_MAGIC_BYTES];  /* 0xFF = must match, 0x00 = wildcard */
-    size_t          magic_len;
+    uint8_t         magic[MAX_MAGIC_BYTES]; // magic bytes sequence
+    uint8_t         mask[MAX_MAGIC_BYTES];  /* 0xFF = must match, 0x00 = wildcard , makes the system more flexible*/
+    size_t          magic_len; // signature length
     size_t          offset;      /* byte offset where magic starts */
 } FileSignature;
 

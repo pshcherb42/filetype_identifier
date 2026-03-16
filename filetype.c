@@ -165,7 +165,7 @@ static char *elf_detail(const uint8_t *buf, size_t len)
  * ------------------------------------------------------------------ */
     FileResult identify_file(const char *path)
 {
-    FileResult result = { NULL, NULL };
+    FileResult result = { NULL, NULL }; // file signature and details(for elf, zip)
 
     FILE *f = fopen(path, "rb");
 
@@ -175,12 +175,12 @@ static char *elf_detail(const uint8_t *buf, size_t len)
         return result;
     }
     
-    uint8_t buf[READ_BUFFER_SIZE];
+    uint8_t buf[READ_BUFFER_SIZE]; // read the first bytes of the file
     size_t  n = fread(buf, 1, sizeof(buf), f);
     printf("Bytes: %02X %02X %02X %02X\n", buf[0], buf[1], buf[2], buf[3]);
     fclose(f);
 
-    for (size_t i = 0; i < N_SIGNATURES; i++) {
+    for (size_t i = 0; i < N_SIGNATURES; i++) { // compare with known signatures
         const FileSignature *s = &SIGNATURES[i];
 
         if (n < s->offset + s->magic_len) continue;
@@ -195,17 +195,17 @@ static char *elf_detail(const uint8_t *buf, size_t len)
         }
 
         if (match) {
-            result.sig = s;
+            result.sig = s;  // for simple files
             /* deep inspection for specific formats */
-            if (strcmp(s->name, "ELF") == 0)
+            if (strcmp(s->name, "ELF") == 0) // for elf
                 result.detail = elf_detail(buf, n);
-            else if (strcmp(s->name, "ZIP/JAR/DOCX") == 0)
+            else if (strcmp(s->name, "ZIP/JAR/DOCX") == 0) // for zip: in-process..
                 zip_identifier(path);
             break;
         }
     }
 
-    return result;
+    return result; //return detected type
 }
 
 void zip_identifier(const char *path){
@@ -215,10 +215,10 @@ void zip_identifier(const char *path){
         return ;
     }
 
-    fseek(f, 0, SEEK_END); // find end
+    fseek(f, 0, SEEK_END); // find end of file
     long filesize = ftell(f); // file size
-    long read_size = EOCD_MAX_COMMENT + EOCD_MIN_SIZE; //0xffff + 22
-    if (read_size > filesize) read_size = filesize; // if this true can we assure that the zip file is empty?
+    long read_size = EOCD_MAX_COMMENT + EOCD_MIN_SIZE; // zip allows a comment field up to 65,535 bytes after the EOCD
+    if (read_size > filesize) read_size = filesize; 
 
     uint8_t *buf = malloc(read_size);
     if(!buf){
@@ -227,19 +227,19 @@ void zip_identifier(const char *path){
         return ;
     }
 
-    fseek(f, filesize - read_size, SEEK_SET); // mover puntero desde el principio al principio de EOCD
+    fseek(f, filesize - read_size, SEEK_SET); // locate EOCD (End Of Central Directory)
     fread(buf, 1, read_size, f);
     //fclose(f);
 
-    for (long i = read_size - EOCD_MIN_SIZE; i >= 0; i--) {
+    for (long i = read_size - EOCD_MIN_SIZE; i >= 0; i--) { // backward scanning
         if (buf[i] == 0x50 && buf[i+1] == 0x4B &&
             buf[i+2] == 0x05 && buf[i+3] == 0x06) {
             printf("Bytes: %02X %02X %02X %02X\n", buf[i], buf[i+1], buf[i+2], buf[i+3]);
-            uint32_t cd_offset = *(uint32_t *)(buf + i + 16);
+            uint32_t cd_offset = *(uint32_t *)(buf + i + 16); // read the CD offset
             printf("CD offset: %u\n", cd_offset);
 
             uint8_t sig[4];
-            fseek(f, cd_offset, SEEK_SET);
+            fseek(f, cd_offset, SEEK_SET); // jump to the CD
             fread(sig, 1, 4, f);
             printf("CD signature: %02X %02X %02X %02X\n",
                 sig[0], sig[1], sig[2], sig[3]);
